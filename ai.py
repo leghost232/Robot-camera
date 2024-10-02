@@ -1,82 +1,95 @@
 import cv2
 import numpy as np
 
-# Define HSV color ranges for yellow, green, blue, and red
-yellow_lower = np.array([20, 100, 100])
-yellow_upper = np.array([30, 255, 255])
+def adjust_brightness_and_gamma(frame, gamma=1.0):
+    img_float = frame.astype(np.float32) / 255.0
+    img_gamma = np.clip(np.power(img_float, gamma), 0, 1)
+    img_corrected = (img_gamma * 255).astype(np.uint8)
+    gray = cv2.cvtColor(img_corrected, cv2.COLOR_BGR2GRAY)
+    average_brightness = np.mean(gray)
 
-# Add sensitivity for green close to yellow
-green_lower = np.array([30, 100, 100])  # Light green range
-green_upper = np.array([70, 255, 255])
+    if average_brightness < 100:
+        img_corrected = cv2.convertScaleAbs(img_corrected, alpha=1.2, beta=0)
+    elif average_brightness > 150:
+        img_corrected = cv2.convertScaleAbs(img_corrected, alpha=0.8, beta=0)
 
-# Blue range, including darker shades for shadows
-blue_lower_dark = np.array([100, 50, 50])   # Include darker blue (shadows)
-blue_upper_dark = np.array([140, 255, 150])
+    return img_corrected
 
-blue_lower_bright = np.array([100, 150, 150])  # Bright blue
-blue_upper_bright = np.array([140, 255, 255])
+def adjust_color_range(lower, upper, fuzziness=10):
+    return (
+        np.array([max(0, lower[0] - fuzziness), lower[1], lower[2]]),
+        np.array([min(180, upper[0] + fuzziness), upper[1], upper[2]])
+    )
 
-# Adjusted red ranges to avoid skin tone confusion
-red_lower1 = np.array([0, 150, 150])
-red_upper1 = np.array([10, 255, 255])
-red_lower2 = np.array([160, 150, 150])
-red_upper2 = np.array([180, 255, 255])
+# Define HSV color ranges with adjusted fuzziness
+yellow_lower, yellow_upper = adjust_color_range(np.array([20, 100, 100]), np.array([30, 255, 255]))
+green_lower, green_upper = adjust_color_range(np.array([30, 100, 100]), np.array([70, 255, 255]))
+blue_lower = np.array([100, 150, 50])
+blue_upper = np.array([140, 255, 255])
+red_lower1, red_upper1 = adjust_color_range(np.array([0, 100, 100]), np.array([10, 255, 255]), fuzziness=10)  # Narrowed
+red_lower2, red_upper2 = adjust_color_range(np.array([160, 100, 100]), np.array([180, 255, 255]), fuzziness=10)  # Narrowed
 
-# Kernel for noise removal (morphological operations)
-kernel = np.ones((5, 5), np.uint8)
-
-# Minimum area for detected objects
-MIN_AREA = 500
+kernel_open = np.ones((5, 5), np.uint8)
+kernel_close = np.ones((7, 7), np.uint8)
+MIN_AREA = 800  # Increased minimum area for red boxes
 
 def detect_colors(frame):
-    # Convert the frame to HSV color space
     hsv_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-    
-    # Detect yellow
+
+    # Detect colors
     yellow_mask = cv2.inRange(hsv_frame, yellow_lower, yellow_upper)
-    
-    # Detect green (close to yellow)
     green_mask = cv2.inRange(hsv_frame, green_lower, green_upper)
-    
-    # Detect blue (darker and brighter)
-    blue_mask_dark = cv2.inRange(hsv_frame, blue_lower_dark, blue_upper_dark)
-    blue_mask_bright = cv2.inRange(hsv_frame, blue_lower_bright, blue_upper_bright)
-    blue_mask = cv2.bitwise_or(blue_mask_dark, blue_mask_bright)
-    
-    # Detect red (two ranges in HSV)
+    blue_mask = cv2.inRange(hsv_frame, blue_lower, blue_upper)
     red_mask1 = cv2.inRange(hsv_frame, red_lower1, red_upper1)
     red_mask2 = cv2.inRange(hsv_frame, red_lower2, red_upper2)
     red_mask = cv2.bitwise_or(red_mask1, red_mask2)
 
-    # Clean up noise using morphological operations
-    yellow_mask = cv2.morphologyEx(yellow_mask, cv2.MORPH_OPEN, kernel)
-    green_mask = cv2.morphologyEx(green_mask, cv2.MORPH_OPEN, kernel)
-    blue_mask = cv2.morphologyEx(blue_mask, cv2.MORPH_OPEN, kernel)
-    red_mask = cv2.morphologyEx(red_mask, cv2.MORPH_OPEN, kernel)
-    
-    # Combine the masks
-    combined_mask = cv2.bitwise_or(yellow_mask, cv2.bitwise_or(green_mask, blue_mask))
-    combined_mask = cv2.bitwise_or(combined_mask, red_mask)
-    
-    # Highlight the detected colors on the original frame
-    result_frame = cv2.bitwise_and(frame, frame, mask=combined_mask)
-    
-    return result_frame, yellow_mask, green_mask, blue_mask, red_mask
+    # Apply morphological operations
+    yellow_mask = cv2.morphologyEx(yellow_mask, cv2.MORPH_OPEN, kernel_open)
+    green_mask = cv2.morphologyEx(green_mask, cv2.MORPH_OPEN, kernel_open)
+    blue_mask = cv2.morphologyEx(blue_mask, cv2.MORPH_CLOSE, kernel_close)
+    red_mask = cv2.morphologyEx(red_mask, cv2.MORPH_CLOSE, kernel_close)  # Changed to close
 
-def draw_bounding_boxes(frame, mask, color_name):
-    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    
-    for contour in contours:
-        area = cv2.contourArea(contour)
-        if area > MIN_AREA:
-            x, y, w, h = cv2.boundingRect(contour)
-            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 2)  # Draw the red rectangle
-            
-            # Put the color name inside the bounding box
-            cv2.putText(frame, color_name, (x + 5, y + h - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+    # Remove dark areas (black) from the blue mask
+    dark_mask = cv2.inRange(hsv_frame, np.array([0, 0, 0]), np.array([180, 255, 50]))  # Low brightness
+    blue_mask = cv2.bitwise_and(blue_mask, cv2.bitwise_not(dark_mask))
+
+    return yellow_mask, green_mask, blue_mask, red_mask
+
+def draw_bounding_boxes(frame, masks):
+    colors = ['Yellow', 'Green', 'Blue', 'Red']
+    color_masks = masks
+
+    largest_area = 0
+    largest_color_index = -1
+
+    for i, mask in enumerate(color_masks):
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        for contour in contours:
+            area = cv2.contourArea(contour)
+            if area > MIN_AREA:
+                if area > largest_area:
+                    largest_area = area
+                    largest_color_index = i
+                if colors[i] != 'Green':
+                    x, y, w, h = cv2.boundingRect(contour)
+                    cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 2)  # Red box for other colors
+                    cv2.putText(frame, colors[i], (x + 5, y + h - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+
+    # Draw a green box for the most prominent color
+    if largest_color_index != -1:
+        largest_mask = color_masks[largest_color_index]
+        contours, _ = cv2.findContours(largest_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        for contour in contours:
+            area = cv2.contourArea(contour)
+            if area == largest_area:
+                x, y, w, h = cv2.boundingRect(contour)
+                cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)  # Green box for largest color
+                cv2.putText(frame, colors[largest_color_index], (x + 5, y + h - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
 def main():
-    # Access the camera feed
     cap = cv2.VideoCapture(0)
     
     while True:
@@ -84,24 +97,17 @@ def main():
         if not ret:
             break
         
-        # Detect colors in the frame
-        result_frame, yellow_mask, green_mask, blue_mask, red_mask = detect_colors(frame)
+        frame = adjust_brightness_and_gamma(frame, gamma=1.2)
         
-        # Draw bounding boxes for each detected color with the color name inside
-        draw_bounding_boxes(frame, yellow_mask, "Yellow")
-        draw_bounding_boxes(frame, green_mask, "Green")
-        draw_bounding_boxes(frame, blue_mask, "Blue")
-        draw_bounding_boxes(frame, red_mask, "Red")
+        masks = detect_colors(frame)
         
-        # Show the original frame with bounding boxes and detected colors
-        cv2.imshow("Detected Colors", result_frame)
+        draw_bounding_boxes(frame, masks)
+        
         cv2.imshow("Original with Bounding Boxes", frame)
 
-        # Exit when 'q' is pressed
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
     
-    # Release the camera and close all windows
     cap.release()
     cv2.destroyAllWindows()
 
