@@ -124,6 +124,9 @@ def main():
         if not ret:
             break
         
+        # Flip the frame horizontally
+        frame = cv2.flip(frame, 1)  # Flip around the vertical axis
+        
         frame = adjust_brightness_and_gamma(frame, gamma=1.2)
         
         masks = detect_colors(frame)
