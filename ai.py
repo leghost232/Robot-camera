@@ -1,6 +1,9 @@
 import cv2
 import numpy as np
 
+# Global variable to toggle red box display
+show_red_boxes = True
+
 def adjust_brightness_and_gamma(frame, gamma=1.0):
     img_float = frame.astype(np.float32) / 255.0
     img_gamma = np.clip(np.power(img_float, gamma), 0, 1)
@@ -32,9 +35,6 @@ red_lower2, red_upper2 = adjust_color_range(np.array([160, 150, 150]), np.array(
 kernel_open = np.ones((5, 5), np.uint8)
 kernel_close = np.ones((7, 7), np.uint8)
 MIN_AREA = 500
-
-# Global variable to toggle red box display
-show_red_boxes = True
 
 def detect_colors(frame):
     hsv_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
@@ -76,16 +76,49 @@ def draw_bounding_boxes(frame, masks):
                     largest_area = area
                     largest_contour = contour
 
-        # If a largest contour was found, draw a green box
+        # Draw green box for the largest contour
         if largest_contour is not None:
             x, y, w, h = cv2.boundingRect(largest_contour)
             cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)  # Green box for largest area
             cv2.putText(frame, colors[i], (x + 5, y + h - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
+        # Draw red boxes for any other contours if toggled on
+        if show_red_boxes:
+            for contour in contours:
+                area = cv2.contourArea(contour)
+                if contour is not largest_contour and area > MIN_AREA:
+                    x, y, w, h = cv2.boundingRect(contour)
+                    cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 2)  # Red box for smaller areas
+                    cv2.putText(frame, colors[i], (x + 5, y + h - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+
+def draw_toggle_button(frame):
+    button_x, button_y = 10, 10
+    button_width, button_height = 200, 50
+
+    # Draw the button rectangle
+    cv2.rectangle(frame, (button_x, button_y), (button_x + button_width, button_y + button_height), (200, 200, 200), -1)
+    
+    # Draw the button text
+    text = "Toggle Red Boxes" if show_red_boxes else "Red Boxes Off"
+    cv2.putText(frame, text, (button_x + 5, button_y + 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
+
+def mouse_callback(event, x, y, flags, param):
+    global show_red_boxes
+    button_x, button_y = 10, 10
+    button_width, button_height = 200, 50
+
+    # Check if left mouse button is clicked
+    if event == cv2.EVENT_LBUTTONDOWN:
+        if (button_x <= x <= button_x + button_width) and (button_y <= y <= button_y + button_height):
+            show_red_boxes = not show_red_boxes
+
 def main():
     global show_red_boxes
     cap = cv2.VideoCapture(0)
-    
+
+    cv2.namedWindow("Original with Bounding Boxes")
+    cv2.setMouseCallback("Original with Bounding Boxes", mouse_callback)
+
     while True:
         ret, frame = cap.read()
         if not ret:
@@ -97,16 +130,15 @@ def main():
         
         draw_bounding_boxes(frame, masks)
         
+        # Draw the toggle button
+        draw_toggle_button(frame)
+        
+        # Show the frame
         cv2.imshow("Original with Bounding Boxes", frame)
-
-        # Toggle red boxes on 'r' key press
-        if cv2.waitKey(1) & 0xFF == ord('r'):
-            show_red_boxes = not show_red_boxes
-            print(f"Show red boxes: {show_red_boxes}")
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
-    
+
     cap.release()
     cv2.destroyAllWindows()
 
