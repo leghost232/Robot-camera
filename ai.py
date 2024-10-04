@@ -63,36 +63,24 @@ def draw_bounding_boxes(frame, masks):
     colors = ['Yellow', 'Green', 'Blue', 'Red']
     color_masks = masks
 
-    largest_area = 0
-    largest_color_index = -1
-
     for i, mask in enumerate(color_masks):
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        
+
+        largest_area = 0
+        largest_contour = None
+
         for contour in contours:
             area = cv2.contourArea(contour)
             if area > MIN_AREA:
                 if area > largest_area:
                     largest_area = area
-                    largest_color_index = i
-                # Draw boxes for colors other than green
-                if colors[i] != 'Green':
-                    x, y, w, h = cv2.boundingRect(contour)
-                    if show_red_boxes or colors[i] != 'Red':  # Check toggle for red boxes
-                        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 2)  # Red box for other colors
-                        cv2.putText(frame, colors[i], (x + 5, y + h - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+                    largest_contour = contour
 
-    # Draw a green box for the most prominent color
-    if largest_color_index != -1:
-        largest_mask = color_masks[largest_color_index]
-        contours, _ = cv2.findContours(largest_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        
-        for contour in contours:
-            area = cv2.contourArea(contour)
-            if area == largest_area:
-                x, y, w, h = cv2.boundingRect(contour)
-                cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)  # Green box for largest color
-                cv2.putText(frame, colors[largest_color_index], (x + 5, y + h - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+        # If a largest contour was found, draw a green box
+        if largest_contour is not None:
+            x, y, w, h = cv2.boundingRect(largest_contour)
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)  # Green box for largest area
+            cv2.putText(frame, colors[i], (x + 5, y + h - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
 def main():
     global show_red_boxes
