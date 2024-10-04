@@ -4,16 +4,18 @@ import numpy as np
 def adjust_brightness_contrast(frame, alpha=1.3, beta=30):
     """
     Adjust brightness and contrast of the frame for better shape visibility.
-    alpha: Contrast control (1.0-3.0)
-    beta: Brightness control (0-100)
     """
     return cv2.convertScaleAbs(frame, alpha=alpha, beta=beta)
 
 def detect_shapes(frame):
+    """
+    Detect and classify shapes in the provided frame.
+    Returns the frame with shapes drawn on it and a list of shape contours.
+    """
     # Convert the frame to grayscale
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-    # Adjust brightness and contrast for better visibility
+    # Adjust brightness and contrast
     gray = adjust_brightness_contrast(gray, alpha=1.5, beta=30)
 
     # Apply GaussianBlur to reduce noise and improve edge detection
@@ -22,46 +24,51 @@ def detect_shapes(frame):
     # Perform edge detection using Canny
     edges = cv2.Canny(blurred, 50, 150)
 
-    # Find contours from the edges
-    contours, hierarchy = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    # Find contours
+    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-    # Create a copy of the frame to draw the contours
-    result_frame = frame.copy()
-
+    shapes = []  # This will store the shapes (contours and their corresponding type)
+    
     # Loop through each contour
     for contour in contours:
-        # Ignore small contours that are less likely to be relevant shapes (noise filtering)
-        if cv2.contourArea(contour) < 300:  # Increase this value for larger shapes
+        if cv2.contourArea(contour) < 300:  # Ignore small contours
             continue
 
         # Approximate the contour to reduce the number of vertices and smooth out the shape
-        epsilon = 0.04 * cv2.arcLength(contour, True)
+        epsilon = 0.05 * cv2.arcLength(contour, True)  # Looser approximation
         approx = cv2.approxPolyDP(contour, epsilon, True)
-        
+
         # Get the number of vertices in the approximated polygon
         num_vertices = len(approx)
 
         # Classify the shape based on the number of vertices
         if num_vertices == 3:
-            shape = "Triangle"
+            shape_type = "Triangle"
         elif num_vertices == 4:
-            # Check if the quadrilateral is a square or rectangle
+            # Determine whether it's a square or rectangle
             x, y, w, h = cv2.boundingRect(approx)
             aspect_ratio = float(w) / h
-            if 0.95 < aspect_ratio < 1.05:
-                shape = "Square"
+            if 0.85 < aspect_ratio < 1.15:
+                shape_type = "Square"
             else:
-                shape = "Rectangle"
-        elif num_vertices == 5:
-            shape = "Pentagon"
-        elif num_vertices == 6:
-            shape = "Hexagon"
+                shape_type = "Rectangle"
         else:
-            shape = "Circle"
+            shape_type = "Other"
 
-        # Draw the contour and put the shape name on the frame
-        cv2.drawContours(result_frame, [approx], -1, (0, 255, 0), 2)
-        
+        # Store the shape and contour
+        shapes.append((contour, shape_type))
+
+    return shapes, frame
+
+def draw_shapes(frame, shapes):
+    """
+    Draw detected shapes on the frame.
+    """
+    result_frame = frame.copy()
+    
+    # Loop over detected shapes and draw them
+    for contour, shape in shapes:
+        cv2.drawContours(result_frame, [contour], -1, (0, 255, 0), 2)
         # Get the center of the contour to place the shape name
         M = cv2.moments(contour)
         if M["m00"] != 0:
@@ -70,23 +77,48 @@ def detect_shapes(frame):
         else:
             cX, cY = 0, 0
 
-        # Add the shape name at the center of the detected shape
+        # Put the shape name at the center of the shape
         cv2.putText(result_frame, shape, (cX - 50, cY), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
 
-    # Use Hough Circle Transform to detect circles (if any)
-    circles = cv2.HoughCircles(
-        gray,
-        cv2.HOUGH_GRADIENT, dp=1.2, minDist=40, param1=100, param2=30, minRadius=20, maxRadius=60
-    )
-
-    # If we find circles, draw them
-    if circles is not None:
-        circles = np.round(circles[0, :]).astype("int")
-        for (x, y, r) in circles:
-            cv2.circle(result_frame, (x, y), r, (0, 0, 255), 4)
-            cv2.putText(result_frame, "Circle", (x - 40, y - r - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
-
     return result_frame
+
+def match_shapes(prev_shapes, new_shapes, max_distance=50):
+    """
+    Match shapes detected in the previous frame with shapes in the current frame.
+    """
+    matched_shapes = []
+    for new_contour, new_shape in new_shapes:
+        best_match = None
+        min_distance = max_distance
+
+        for prev_contour, prev_shape in prev_shapes:
+            # Calculate the center of the contour for matching
+            M_new = cv2.moments(new_contour)
+            if M_new["m00"] != 0:
+                cX_new = int(M_new["m10"] / M_new["m00"])
+                cY_new = int(M_new["m01"] / M_new["m00"])
+            else:
+                cX_new, cY_new = 0, 0
+
+            M_prev = cv2.moments(prev_contour)
+            if M_prev["m00"] != 0:
+                cX_prev = int(M_prev["m10"] / M_prev["m00"])
+                cY_prev = int(M_prev["m01"] / M_prev["m00"])
+            else:
+                cX_prev, cY_prev = 0, 0
+
+            # Calculate the distance between the centers of the contours
+            distance = np.sqrt((cX_new - cX_prev) ** 2 + (cY_new - cY_prev) ** 2)
+
+            # If the distance is less than the threshold, consider it a match
+            if distance < min_distance:
+                min_distance = distance
+                best_match = (prev_contour, prev_shape)
+
+        if best_match:
+            matched_shapes.append(best_match)
+
+    return matched_shapes
 
 def main():
     # Initialize the camera (0 is typically the default camera)
@@ -96,20 +128,30 @@ def main():
         print("Error: Could not open video stream.")
         return
 
-    # Loop to capture frames from the camera
+    # Variable to hold previous frame shapes
+    prev_shapes = []
+
     while True:
         # Capture frame-by-frame
         ret, frame = cap.read()
-
         if not ret:
             print("Failed to grab frame")
             break
 
-        # Detect shapes in the captured frame
-        result_frame = detect_shapes(frame)
+        # Detect shapes in the current frame
+        new_shapes, result_frame = detect_shapes(frame)
+
+        # Match new shapes with previous ones (based on movement)
+        matched_shapes = match_shapes(prev_shapes, new_shapes)
+
+        # Draw matched shapes on the frame
+        result_frame = draw_shapes(result_frame, matched_shapes)
 
         # Display the result
         cv2.imshow("Detected Shapes", result_frame)
+
+        # Update previous shapes
+        prev_shapes = new_shapes
 
         # Break the loop when the user presses 'q'
         if cv2.waitKey(1) & 0xFF == ord('q'):
