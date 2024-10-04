@@ -1,0 +1,45 @@
+import cv2
+import numpy as np
+
+def detect_shapes(image):
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)  # Görüntüyü gri tonlamaya çevir
+    _, thresh = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY)  # Eşikleme
+
+    contours, _ = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)  # Konturları bul
+
+    for contour in contours:
+        # Konturun alanını hesapla
+        area = cv2.contourArea(contour)
+        if area < 100:  # Küçük alanları atla
+            continue
+
+        # Konturun çevresini hesapla
+        perimeter = cv2.arcLength(contour, True)
+        approx = cv2.approxPolyDP(contour, 0.02 * perimeter, True)  # Şekli yaklaştır
+
+        # Şekli belirle
+        if len(approx) == 4:
+            shape_name = "Küp"
+        elif len(approx) > 4:
+            shape_name = "Daire"
+        else:
+            shape_name = "Bilinmiyor"
+
+        # Şekli görüntüde göster
+        cv2.drawContours(image, [contour], -1, (0, 255, 0), 2)  # Konturu çiz
+        M = cv2.moments(contour)  # Konturun merkezini bul
+        if M["m00"] != 0:
+            cX = int(M["m10"] / M["m00"])
+            cY = int(M["m01"] / M["m00"])
+            cv2.putText(image, shape_name, (cX - 20, cY - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+
+    return image
+
+# Görüntüyü yükle
+image = cv2.imread('shapes.png')  # 'shapes.png' dosya adını kendi görüntü dosyanızla değiştirin
+result_image = detect_shapes(image)
+
+# Sonucu göster
+cv2.imshow('Shape Detection', result_image)
+cv2.waitKey(0)
+cv2.destroyAllWindows()
