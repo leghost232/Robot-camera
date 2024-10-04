@@ -24,7 +24,7 @@ def adjust_color_range(lower, upper, fuzziness=10):
         np.array([min(180, upper[0] + fuzziness), upper[1], upper[2]])
     )
 
-# Define HSV color ranges with fuzziness
+# Define HSV color ranges with fuzziness                
 yellow_lower, yellow_upper = adjust_color_range(np.array([20, 100, 100]), np.array([30, 255, 255]))
 green_lower, green_upper = adjust_color_range(np.array([30, 100, 100]), np.array([70, 255, 255]))
 blue_lower = np.array([100, 150, 50])  # Adjusted lower bound
