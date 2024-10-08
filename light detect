@@ -1,0 +1,69 @@
+import cv2
+import numpy as np
+
+# Global variable to toggle red box display
+show_red_boxes = True
+
+# Constants
+MIN_AREA = 500
+kernel_open = np.ones((5, 5), np.uint8)
+kernel_close = np.ones((7, 7), np.uint8)
+
+def adjust_brightness_and_gamma(frame, gamma=1.0):
+    img_float = frame.astype(np.float32) / 255.0
+    img_gamma = np.clip(np.power(img_float, gamma), 0, 1)
+    img_corrected = (img_gamma * 255).astype(np.uint8)
+    gray = cv2.cvtColor(img_corrected, cv2.COLOR_BGR2GRAY)
+    average_brightness = np.mean(gray)
+
+    if average_brightness < 100:
+        img_corrected = cv2.convertScaleAbs(img_corrected, alpha=1.2, beta=0)
+    elif average_brightness > 150:
+        img_corrected = cv2.convertScaleAbs(img_corrected, alpha=0.8, beta=0)
+
+    return img_corrected
+
+def draw_brightest_box(frame):
+    gray_image = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(gray_image)
+
+    # En parlak noktanın etrafına kutu çiz
+    box_size = 40  # Kutunun boyutu
+    top_left = (max_loc[0] - box_size // 2, max_loc[1] - box_size // 2)
+    bottom_right = (max_loc[0] + box_size // 2, max_loc[1] + box_size // 2)
+
+    # Kutunun boyutunu görüntü boyutları içinde sınırla
+    top_left = (max(0, top_left[0]), max(0, top_left[1]))
+    bottom_right = (min(frame.shape[1] - 1, bottom_right[0]), min(frame.shape[0] - 1, bottom_right[1]))
+
+    cv2.rectangle(frame, top_left, bottom_right, (255, 0, 0), 2)  # Mavi kutu
+
+    # "En Parlak" yazısı ve koordinatlar
+    cv2.putText(frame, f"En Parlak: {max_loc}", (max_loc[0] + 10, max_loc[1]), 
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1, cv2.LINE_AA)
+
+def main():
+    global show_red_boxes
+    cap = cv2.VideoCapture(0)
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        frame = cv2.flip(frame, 1)  # Flip around the vertical axis
+        frame = adjust_brightness_and_gamma(frame, gamma=1.2)
+
+        # Draw the brightest box
+        draw_brightest_box(frame)
+
+        # Show the frame
+        cv2.imshow("En Parlak Nokta", frame)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+    cap.release()
+    cv2.destroyAllWindows()
+
+if __name__ == "__main__":
+    main()
