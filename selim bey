@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fotoğraf Galerisi</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            text-align: center;
+            margin: 0;
+            padding: 20px;
+        }
+        img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 10px;
+        }
+        h1 {
+            color: #333;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        iframe {
+            margin-top: 20px;
+            width: 100%;
+            max-width: 560px;
+            height: 315px;
+            border: none;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Fotoğraf Galerisi</h1>
+    <img src="https://pbs.twimg.com/media/GTz0KdwWAAEZ0Oa?format=jpg&name=large" alt="Başlangıç Fotoğrafı">
+    <br><br>
+    <button onclick="changePhoto()">Yeni Fotoğraf Aç</button>
+    <br><br>
+    <iframe src="https://www.youtube.com/embed/GwFPVGXwXT0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+
+    <script>
+        function changePhoto() {
+            // Buraya yeni fotoğrafın linkini yazın
+            const newPhotoUrl = "https://img-s1.onedio.com/id-669f8e3606618a08150cde99/rev-0/w-600/h-337/f-jpg/s-5fc3fbd013978d6e58f4ae0ad47ae7fc1c06358f.jpg";
+            window.open(newPhotoUrl, '_blank');
+        }
+    </script>
+
+</body>
+</html>
