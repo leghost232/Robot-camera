@@ -1,11 +1,15 @@
 <!DOCTYPE html> 
 <html>
 <head>
-<titl>Oya Akin yildiz Okullari</title>
-
+<title>Oya Akin Okullari</title>
 </head>
 <body>
-<h1>ELIF DEMIR</h1>
-<p>BILISIM TEKNOLOJILERI OGRETMENI</p>
+<p>ELIF DEMIR<br>
+<h2>Baslik 2</h2>
+<h3>Baslik 3</h3>
+<h4>Baslik 4</h4>
+<h5>Baslik 5</h5>
+<h6>Baslik 6</h6>
+<p>TIMUCIN</p>
 </body>
 </html>
